@@ -190,14 +190,34 @@ export function useCreateBusinessUnit() {
     mutationFn: async (input: CreateBusinessUnitInput): Promise<BusinessUnit> => {
       const supabase = getClient();
 
-      // Get current user's org
-      const { data: profile } = await supabase
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('[useCreateBusinessUnit] auth.getUser failed', authError);
+        throw new Error(authError.message || 'Não foi possível validar a sessão.');
+      }
+
+      const user = authData.user;
+      if (!user) {
+        throw new Error('Usuário não autenticado.');
+      }
+
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('organization_id')
-        .single();
+        .eq('id', user.id)
+        .maybeSingle();
 
-      if (!profile?.organization_id) {
-        throw new Error('Organization not found');
+      if (profileError) {
+        console.error('[useCreateBusinessUnit] profile lookup failed', profileError);
+        throw new Error(profileError.message || 'Erro ao buscar o perfil do usuário.');
+      }
+
+      if (!profile) {
+        throw new Error('Perfil do usuário não encontrado.');
+      }
+
+      if (!profile.organization_id) {
+        throw new Error('O perfil do usuário não possui organization_id.');
       }
 
       const dbData = toDb(input, profile.organization_id);
@@ -208,7 +228,10 @@ export function useCreateBusinessUnit() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useCreateBusinessUnit] insert failed', error);
+        throw new Error(error.message || 'Erro ao criar unidade de negócio.');
+      }
 
       // Add initial members if provided
       if (input.memberIds?.length) {
