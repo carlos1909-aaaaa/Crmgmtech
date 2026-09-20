@@ -182,7 +182,9 @@ export async function POST(req: Request) {
 
     result.skipWaitProject = result.projectReady;
     result.skipWaitStorage = result.storageReady;
-    result.skipMigrations = result.schemaApplied;
+    // organizations existing only means schema_init ran — later migrations may still be missing.
+    // runSchemaMigration() tracks versions and is safe to re-run; never skip it from this heuristic.
+    result.skipMigrations = false;
     result.skipBootstrap = result.hasAdmin && result.hasOrganization;
 
     let estimatedSeconds = 10;
